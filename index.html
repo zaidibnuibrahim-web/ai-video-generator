@@ -3,30 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>REAL OBJECT MOTION AI</title>
 
 <style>
-body{
-background:#000;
-color:white;
-text-align:center;
-font-family:Arial;
-}
-
-canvas{
-width:92vw;
-max-width:360px;
-border:2px solid white;
-margin-top:10px;
-}
+body{background:#000;color:white;text-align:center;font-family:Arial}
+canvas{width:92vw;max-width:360px;border:2px solid white}
+button{padding:12px;margin:10px;font-size:16px}
 </style>
 </head>
 
 <body>
 
-<h3>REAL OBJECT MOTION (NOT CAMERA SHAKE)</h3>
+<h3>REAL AI HUMAN MOTION</h3>
 
-<input type="file" id="upload" accept="image/*"><br>
+<input type="file" id="upload"><br>
 <canvas id="c" width="720" height="1280"></canvas><br>
 <button onclick="generate()">GENERATE VIDEO</button>
 
@@ -39,44 +28,52 @@ let ready=false;
 
 upload.onchange=e=>{
 img.src=URL.createObjectURL(e.target.files[0]);
-img.onload=()=>{
-ready=true;
-drawBase();
-};
+img.onload=()=>ready=true;
 };
 
-// ================= BASE IMAGE =================
-function drawBase(){
-ctx.drawImage(img,0,0,canvas.width,canvas.height);
-}
+// ===== OBJECT AREA (posisi manusia tengah)
+const body={
+x:170,
+y:260,
+w:380,
+h:600
+};
 
-// ================= OBJECT PHYSICS =================
-let objX=0,objY=0;
-let velX=0,velY=0;
+// ===== HUMAN PHYSICS =====
+let posY=0;
+let velY=0;
 
-function objectMotion(frame){
+function humanMotion(t){
 
-// gerakan manusia nyata (bukan goyang)
-const targetX=Math.sin(frame*0.05)*14;
-const targetY=Math.cos(frame*0.04)*24;
+// breathing
+const breath=Math.sin(t*0.05)*6;
 
-velX+=(targetX-objX)*0.08;
-velY+=(targetY-objY)*0.08;
+// weight shift
+const shift=Math.sin(t*0.025)*10;
 
-velX*=0.85;
+// inertia physics
+const target=breath+shift;
+
+velY+=(target-posY)*0.12;
 velY*=0.85;
 
-objX+=velX;
-objY+=velY;
+posY+=velY;
 
-return {x:objX,y:objY};
+// head stabilization (anti goyang)
+const stabilize=Math.sin(t*0.2)*1.2;
+
+return{
+y:posY,
+scale:1+(breath*0.0009),
+stabilize
+};
 }
 
-// ================= FILM GRAIN =================
+// ===== FILM GRAIN =====
 function grain(){
-ctx.globalAlpha=0.08;
-for(let i=0;i<60;i++){
-ctx.fillStyle=`rgba(255,255,255,${Math.random()*0.03})`;
+ctx.globalAlpha=0.05;
+for(let i=0;i<40;i++){
+ctx.fillStyle="white";
 ctx.fillRect(
 Math.random()*canvas.width,
 Math.random()*canvas.height,
@@ -86,33 +83,35 @@ Math.random()*canvas.height,
 ctx.globalAlpha=1;
 }
 
-// ================= DRAW FRAME =================
+// ===== DRAW FRAME =====
 function drawFrame(frame){
 
-// background DIAM
+// background tetap
 ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
-// area objek (tengah)
-const maskW=canvas.width*0.5;
-const maskH=canvas.height*0.55;
-const maskX=canvas.width*0.25;
-const maskY=canvas.height*0.25;
+// ambil objek
+const cut=ctx.getImageData(
+body.x,
+body.y,
+body.w,
+body.h
+);
 
-const m=objectMotion(frame);
+const m=humanMotion(frame);
 
 ctx.save();
 
-ctx.beginPath();
-ctx.rect(maskX,maskY,maskW,maskH);
-ctx.clip();
+ctx.translate(
+body.x+body.w/2,
+body.y+body.h/2+m.y
+);
 
-// hanya objek bergerak
-ctx.drawImage(
-img,
-m.x,
-m.y,
-canvas.width,
-canvas.height
+ctx.scale(m.scale,m.scale);
+
+ctx.putImageData(
+cut,
+-body.w/2,
+-body.h/2
 );
 
 ctx.restore();
@@ -120,7 +119,7 @@ ctx.restore();
 grain();
 }
 
-// ================= VIDEO EXPORT =================
+// ===== VIDEO EXPORT =====
 function generate(){
 
 if(!ready){
@@ -141,7 +140,7 @@ mimeType:"video/webm;codecs=vp9"
 let chunks=[];
 
 recorder.ondataavailable=e=>{
-if(e.data.size>0) chunks.push(e.data);
+if(e.data.size>0)chunks.push(e.data);
 };
 
 recorder.onstop=()=>{
@@ -150,7 +149,7 @@ const url=URL.createObjectURL(blob);
 
 const a=document.createElement("a");
 a.href=url;
-a.download="real_ai_motion.mp4";
+a.download="real_ai_human_motion.mp4";
 a.click();
 };
 
