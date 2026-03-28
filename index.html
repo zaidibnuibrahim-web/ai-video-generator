@@ -1,116 +1,108 @@
 <script>
 
-// ================= CANVAS 9:16 =================
-const canvas=document.getElementById("canvas");
-const ctx=canvas.getContext("2d");
+// ================= CANVAS PORTRAIT 9:16 =================
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
 function resizeCanvas(){
-const h=Math.min(window.innerHeight*0.75,960);
-canvas.height=h;
-canvas.width=h*(9/16);
+  const h = Math.min(window.innerHeight*0.75,960);
+  canvas.height = h;
+  canvas.width  = h*(9/16);
 }
 resizeCanvas();
 window.addEventListener("resize",resizeCanvas);
 
 // ================= IMAGE =================
-let img=new Image();
+let img = new Image();
 
-imageInput.onchange=e=>{
-img.src=URL.createObjectURL(e.target.files[0]);
-img.onload=startVideo;
+imageInput.onchange = e=>{
+  img.src = URL.createObjectURL(e.target.files[0]);
+  img.onload = startVideo;
 };
 
-// ================= CINEMA COLOR =================
+// ================= COLOR =================
 function cinemaColor(){
-ctx.filter="contrast(1.2) saturate(0.92) brightness(1.05)";
+  ctx.filter="contrast(1.2) saturate(0.92) brightness(1.05)";
 }
-function resetColor(){ctx.filter="none";}
+function resetColor(){
+  ctx.filter="none";
+}
 
 // ================= LIGHT FILM GRAIN =================
 const grain=document.createElement("canvas");
 const gctx=grain.getContext("2d");
-grain.width=50;
-grain.height=80;
+grain.width=80;
+grain.height=140;
 
 function filmGrain(){
-const data=gctx.createImageData(grain.width,grain.height);
-const d=data.data;
 
-for(let i=0;i<d.length;i+=4){
-const v=130+Math.random()*12;
-d[i]=d[i+1]=d[i+2]=v;
-d[i+3]=6;
+  const data=gctx.createImageData(grain.width,grain.height);
+  const b=data.data;
+
+  for(let i=0;i<b.length;i+=4){
+    const v=130+Math.random()*20;
+    b[i]=b[i+1]=b[i+2]=v;
+    b[i+3]=10;
+  }
+
+  gctx.putImageData(data,0,0);
+
+  ctx.globalAlpha=0.06;
+  ctx.drawImage(grain,0,0,canvas.width,canvas.height);
+  ctx.globalAlpha=1;
 }
 
-gctx.putImageData(data,0,0);
-ctx.globalAlpha=0.05;
-ctx.drawImage(grain,0,0,canvas.width,canvas.height);
-ctx.globalAlpha=1;
-}
-
-// ================= REAL CAMERA (NO OSCILLATION) =================
-
-// posisi kamera
-let camX=0;
-let camY=0;
-
-// velocity → gerakan halus manusia
-let velX=0;
-let velY=0;
+// ================= REAL CAMERA (NO GOYANG) =================
+let camX=0, camY=0;
+let velX=0, velY=0;
 
 function camera(frame){
 
-// TARGET hanya MAJU (bukan bolak balik)
-let targetX = frame * 0.9;
-let targetY = frame * 0.15;
+  // gerakan maju stabil (bukan goyang)
+  const targetX = frame*0.8;
+  const targetY = frame*0.12;
 
-// inertia kamera berat
-velX += (targetX - camX) * 0.02;
-velY += (targetY - camY) * 0.02;
+  velX += (targetX-camX)*0.02;
+  velY += (targetY-camY)*0.02;
 
-// damping → hilangkan getaran
-velX *= 0.92;
-velY *= 0.92;
+  velX *= 0.92;
+  velY *= 0.92;
 
-camX += velX;
-camY += velY;
+  camX += velX;
+  camY += velY;
 
-// zoom cinematic stabil
-let zoom = 1.10 + frame * 0.0015;
+  const zoom = 1.12 + frame*0.0015;
 
-return {
-x: camX,
-y: camY,
-scale: zoom
-};
+  return {x:camX,y:camY,scale:zoom};
 }
 
 // ================= DRAW =================
 function drawFrame(frame){
 
-cinemaColor();
+  cinemaColor();
 
-const cam=camera(frame);
+  const cam=camera(frame);
 
-const ratio=Math.max(
-canvas.width/img.width,
-canvas.height/img.height
-);
+  const ratio=Math.max(
+    canvas.width/img.width,
+    canvas.height/img.height
+  );
 
-const w=img.width*ratio*cam.scale;
-const h=img.height*ratio*cam.scale;
+  const w=img.width*ratio*cam.scale;
+  const h=img.height*ratio*cam.scale;
 
-ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-ctx.drawImage(
-img,
-(canvas.width-w)/2-cam.x,
-(canvas.height-h)/2-cam.y,
-w,h
-);
+  ctx.drawImage(
+    img,
+    (canvas.width-w)/2-cam.x,
+    (canvas.height-h)/2-cam.y,
+    w,
+    h
+  );
 
-filmGrain();
-resetColor();
+  filmGrain();
+  resetColor();
 }
 
 // ================= AUTO EXPORT VIDEO =================
@@ -120,49 +112,49 @@ const maxFrame=360; // 12 detik
 
 function startVideo(){
 
-const stream=canvas.captureStream(120);
+  const stream=canvas.captureStream(120);
 
-let options={mimeType:'video/mp4;codecs=h264'};
-if(!MediaRecorder.isTypeSupported(options.mimeType)){
-options={mimeType:'video/webm'};
+  let options={mimeType:'video/mp4;codecs=h264'};
+  if(!MediaRecorder.isTypeSupported(options.mimeType)){
+    options={mimeType:'video/webm'};
+  }
+
+  recorder=new MediaRecorder(stream,options);
+  chunks=[];
+
+  recorder.ondataavailable=e=>{
+    if(e.data.size>0) chunks.push(e.data);
+  };
+
+  recorder.onstop=()=>{
+    const blob=new Blob(chunks,{type:options.mimeType});
+    const url=URL.createObjectURL(blob);
+
+    const a=document.createElement("a");
+    a.href=url;
+    a.download="cinematic_ai_video.mp4";
+    a.click();
+  };
+
+  recorder.start();
+
+  frame=0;
+
+  function animate(){
+
+    drawFrame(frame);
+
+    // CEPAT TANPA SLOW MOTION
+    frame+=3;
+
+    if(frame<maxFrame){
+      requestAnimationFrame(animate);
+    }else{
+      recorder.stop();
+    }
+  }
+
+  animate();
 }
 
-recorder=new MediaRecorder(stream,options);
-chunks=[];
-
-recorder.ondataavailable=e=>{
-if(e.data.size>0)chunks.push(e.data);
-};
-
-recorder.onstop=()=>{
-const blob=new Blob(chunks,{type:options.mimeType});
-const url=URL.createObjectURL(blob);
-
-const a=document.createElement("a");
-a.href=url;
-a.download="cinematic_real_camera.mp4";
-a.click();
-};
-
-recorder.start();
-
-frame=0;
-
-function animate(){
-
-drawFrame(frame);
-
-// cepat tapi stabil (NO SLOW)
-frame+=3;
-
-if(frame<maxFrame){
-requestAnimationFrame(animate);
-}else{
-recorder.stop();
-}
-}
-
-animate();
-}
-
-  </script>
+    </script>
