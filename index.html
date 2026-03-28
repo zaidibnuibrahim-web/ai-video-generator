@@ -3,153 +3,201 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cinematic AI Video</title>
+
+<title>AI Cinematic Video Generator ULTRA</title>
 
 <style>
 body{
-    background:#000;
-    color:white;
-    text-align:center;
-    font-family:Arial;
+background:#000;
+color:#fff;
+font-family:Arial;
+text-align:center;
+margin:0;
 }
 
 canvas{
-    border:2px solid white;
-    width:90vw;
-    max-width:360px;
+width:92vw;
+max-width:360px;
+border:2px solid #fff;
+margin-top:10px;
 }
+
 button{
-    padding:12px;
-    margin:10px;
-    font-size:16px;
+padding:14px;
+margin:10px;
+font-size:16px;
+font-weight:bold;
 }
 </style>
 </head>
 
 <body>
 
-<h3>Cinematic AI Video Generator</h3>
+<h3>AI CINEMATIC VIDEO GENERATOR</h3>
 
-<input type="file" id="imgInput" accept="image/*"><br>
-<canvas id="canvas" width="720" height="1280"></canvas><br>
-
-<button onclick="startRender()">Render Video</button>
+<input type="file" id="upload" accept="image/*"><br>
+<canvas id="c" width="720" height="1280"></canvas><br>
+<button onclick="generate()">GENERATE VIDEO</button>
 
 <script>
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+const canvas=document.getElementById("c");
+const ctx=canvas.getContext("2d",{alpha:false});
 
-let img = new Image();
-let loaded = false;
+let img=new Image();
+let ready=false;
 
-// ================= LOAD IMAGE =================
-document.getElementById("imgInput").onchange = e=>{
-    const file = e.target.files[0];
-    if(!file) return;
+upload.onchange=e=>{
+ const file=e.target.files[0];
+ if(!file) return;
 
-    img.src = URL.createObjectURL(file);
+ img.src=URL.createObjectURL(file);
 
-    img.onload = ()=>{
-        loaded = true;
-        drawFrame(0);
-    };
+ img.onload=()=>{
+   ready=true;
+   renderStill();
+ };
 };
 
-// ================= DRAW FRAME =================
-function drawFrame(t){
-
-    // background hitam (anti putih)
-    ctx.fillStyle="black";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    if(!loaded) return;
-
-    // zoom cinematic pelan
-    const scale = 1 + t*0.0005;
-
-    const w = canvas.width * scale;
-    const h = canvas.height * scale;
-
-    const x = (canvas.width - w)/2;
-    const y = (canvas.height - h)/2;
-
-    ctx.drawImage(img,x,y,w,h);
-
-    filmGrain();
+// ================= INITIAL DRAW =================
+function renderStill(){
+ ctx.drawImage(img,0,0,canvas.width,canvas.height);
 }
 
-// ================= FILM GRAIN =================
+// ================= LIGHT CINEMATIC GRAIN =================
 const grain=document.createElement("canvas");
 const gctx=grain.getContext("2d");
-grain.width=80;
-grain.height=140;
+grain.width=64;
+grain.height=64;
 
 function filmGrain(){
-    const data=gctx.createImageData(grain.width,grain.height);
-    const buf=data.data;
+ const id=gctx.createImageData(64,64);
+ const d=id.data;
 
-    for(let i=0;i<buf.length;i+=4){
-        const v=Math.random()*255;
-        buf[i]=v;
-        buf[i+1]=v;
-        buf[i+2]=v;
-        buf[i+3]=25;
-    }
+ for(let i=0;i<d.length;i+=4){
+   const v=110+Math.random()*30;
+   d[i]=d[i+1]=d[i+2]=v;
+   d[i+3]=16;
+ }
 
-    gctx.putImageData(data,0,0);
+ gctx.putImageData(id,0,0);
 
-    ctx.globalAlpha=0.15;
-    ctx.drawImage(grain,0,0,canvas.width,canvas.height);
-    ctx.globalAlpha=1;
+ ctx.globalAlpha=0.12;
+ ctx.drawImage(grain,0,0,canvas.width,canvas.height);
+ ctx.globalAlpha=1;
 }
 
-// ================= VIDEO RENDER =================
-function startRender(){
+// ================= REAL OBJECT PHYSICS =================
+let posX=0,posY=0;
+let velX=0,velY=0;
 
-    if(!loaded){
-        alert("Upload gambar dulu");
-        return;
-    }
+function objectPhysics(frame){
 
-    const stream = canvas.captureStream(30);
+ // target movement seperti manusia (tidak sinus kaku)
+ const targetX=Math.sin(frame*0.045)*18;
+ const targetY=Math.cos(frame*0.05)*28;
 
-    const recorder = new MediaRecorder(stream,{
-        mimeType:"video/webm"
-    });
+ // inertia
+ velX+=(targetX-posX)*0.06;
+ velY+=(targetY-posY)*0.06;
 
-    let chunks=[];
+ // damping fisika nyata
+ velX*=0.82;
+ velY*=0.82;
 
-    recorder.ondataavailable=e=>{
-        if(e.data.size>0) chunks.push(e.data);
-    };
+ posX+=velX;
+ posY+=velY;
 
-    recorder.onstop=()=>{
-        const blob=new Blob(chunks,{type:"video/webm"});
-        const url=URL.createObjectURL(blob);
+ return {x:posX,y:posY};
+}
 
-        const a=document.createElement("a");
-        a.href=url;
-        a.download="cinematic_ai_video.webm";
-        a.click();
-    };
+// ================= DRAW FRAME =================
+function drawFrame(frame){
 
-    recorder.start();
+ ctx.fillStyle="#000";
+ ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    let frame=0;
-    let total=180; // 6 detik
+ // background tetap
+ ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
-    function animate(){
-        drawFrame(frame);
-        frame+=2;
+ // area objek
+ const w=canvas.width*0.52;
+ const h=canvas.height*0.52;
+ const x=canvas.width*0.24;
+ const y=canvas.height*0.27;
 
-        if(frame<total){
-            requestAnimationFrame(animate);
-        }else{
-            recorder.stop();
-        }
-    }
+ const motion=objectPhysics(frame);
 
-    animate();
+ ctx.save();
+
+ ctx.beginPath();
+ ctx.rect(x,y,w,h);
+ ctx.clip();
+
+ ctx.drawImage(
+   img,
+   motion.x,
+   motion.y,
+   canvas.width,
+   canvas.height
+ );
+
+ ctx.restore();
+
+ filmGrain();
+}
+
+// ================= VIDEO GENERATION =================
+async function generate(){
+
+ if(!ready){
+   alert("Upload gambar dulu");
+   return;
+ }
+
+ const FPS=60;
+ const DURATION=12; // detik FIX
+ const TOTAL_FRAMES=FPS*DURATION;
+
+ const stream=canvas.captureStream(FPS);
+
+ const recorder=new MediaRecorder(stream,{
+   mimeType:"video/webm;codecs=vp9"
+ });
+
+ let chunks=[];
+
+ recorder.ondataavailable=e=>{
+   if(e.data.size>0) chunks.push(e.data);
+ };
+
+ recorder.onstop=()=>{
+   const blob=new Blob(chunks,{type:"video/webm"});
+   const url=URL.createObjectURL(blob);
+
+   const a=document.createElement("a");
+   a.href=url;
+   a.download="cinematic_ai_video.mp4";
+   a.click();
+ };
+
+ recorder.start();
+
+ let frame=0;
+
+ function render(){
+
+   drawFrame(frame);
+
+   frame+=1; // NO SLOW MOTION
+
+   if(frame<TOTAL_FRAMES){
+     requestAnimationFrame(render);
+   }else{
+     recorder.stop();
+   }
+ }
+
+ render();
 }
 </script>
 
