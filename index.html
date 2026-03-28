@@ -1,39 +1,3 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI Cinematic Video Generator</title>
-
-<style>
-body{
-background:#0f0f0f;
-color:white;
-font-family:Arial;
-text-align:center;
-}
-
-canvas{
-border-radius:12px;
-margin-top:15px;
-max-width:92%;
-}
-
-input{
-margin-top:20px;
-}
-</style>
-</head>
-
-<body>
-
-<h2>🎬 AI Cinematic Generator (REAL CAMERA)</h2>
-
-<input type="file" id="imageInput" accept="image/*">
-
-<br>
-<canvas id="canvas"></canvas>
-
 <script>
 
 // ================= CANVAS 9:16 =================
@@ -56,12 +20,160 @@ img.src=URL.createObjectURL(e.target.files[0]);
 img.onload=startAutoVideo;
 };
 
-// ================= NETFLIX COLOR =================
-function netflixColor(frame){
-const exp=1.05+Math.sin(frame*0.04)*0.015;
-ctx.filter=`contrast(1.23) saturate(0.92) brightness(${exp})`;
+// ================= CINEMA COLOR =================
+function cinemaColor(frame){
+ctx.filter="contrast(1.22) saturate(0.92) brightness(1.05)";
 }
 function resetColor(){ctx.filter="none";}
+
+// ================= FILM GRAIN (VERY LIGHT) =================
+const grain=document.createElement("canvas");
+const gctx=grain.getContext("2d");
+grain.width=60;
+grain.height=100;
+
+function filmGrain(){
+const data=gctx.createImageData(grain.width,grain.height);
+const d=data.data;
+
+for(let i=0;i<d.length;i+=4){
+const v=130+Math.random()*15;
+d[i]=d[i+1]=d[i+2]=v;
+d[i+3]=8;
+}
+
+gctx.putImageData(data,0,0);
+ctx.globalAlpha=0.06;
+ctx.drawImage(grain,0,0,canvas.width,canvas.height);
+ctx.globalAlpha=1;
+}
+
+// ================= REAL OPERATOR CAMERA =================
+
+// posisi kamera
+let camX=0, camY=0;
+
+// velocity (massa kamera)
+let velX=0, velY=0;
+
+// target framing (subject tracking)
+function camera(frame){
+
+// kamera maju stabil (operator jalan)
+let targetX = frame * 1.2;
+let targetY = 0;
+
+// correction kecil seperti operator adjust framing
+targetY += Math.sin(frame*0.03)*25;
+
+// inertia (kamera berat)
+velX += (targetX-camX)*0.03;
+velY += (targetY-camY)*0.03;
+
+// damping → hilangkan goyang
+velX *= 0.90;
+velY *= 0.90;
+
+camX += velX;
+camY += velY;
+
+// IMPACT hanya sesekali
+let impact = 0;
+if(frame%90===0){
+impact = 8;
+}
+
+// zoom push cinematic (bukan oscillate)
+let zoom = 1.12 + frame*0.0012;
+
+return{
+x:camX + impact,
+y:camY,
+scale:zoom
+};
+}
+
+// ================= DRAW =================
+function drawFrame(frame){
+
+cinemaColor(frame);
+
+const cam=camera(frame);
+
+const ratio=Math.max(
+canvas.width/img.width,
+canvas.height/img.height
+);
+
+const w=img.width*ratio*cam.scale;
+const h=img.height*ratio*cam.scale;
+
+ctx.clearRect(0,0,canvas.width,canvas.height);
+
+ctx.drawImage(
+img,
+(canvas.width-w)/2-cam.x,
+(canvas.height-h)/2-cam.y,
+w,h
+);
+
+filmGrain();
+resetColor();
+}
+
+// ================= AUTO VIDEO =================
+let recorder,chunks=[];
+let frame=0;
+const maxFrame=360; // 12 detik
+
+function startAutoVideo(){
+
+const stream=canvas.captureStream(120);
+
+let options={mimeType:'video/mp4;codecs=h264'};
+if(!MediaRecorder.isTypeSupported(options.mimeType)){
+options={mimeType:'video/webm'};
+}
+
+recorder=new MediaRecorder(stream,options);
+chunks=[];
+
+recorder.ondataavailable=e=>{
+if(e.data.size>0)chunks.push(e.data);
+};
+
+recorder.onstop=()=>{
+const blob=new Blob(chunks,{type:options.mimeType});
+const url=URL.createObjectURL(blob);
+
+const a=document.createElement("a");
+a.href=url;
+a.download="real_camera_ai.mp4";
+a.click();
+};
+
+recorder.start();
+
+frame=0;
+
+function animate(){
+
+drawFrame(frame);
+
+// gerakan cepat TANPA slow
+frame+=3;
+
+if(frame<maxFrame){
+requestAnimationFrame(animate);
+}else{
+recorder.stop();
+}
+}
+
+animate();
+}
+
+</script>function resetColor(){ctx.filter="none";}
 
 // ================= LIGHT FILM GRAIN =================
 const grain=document.createElement("canvas");
