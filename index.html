@@ -1,39 +1,30 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-
-<title>AI Cinematic Video Generator ULTRA</title>
+<title>REAL OBJECT MOTION AI</title>
 
 <style>
 body{
 background:#000;
-color:#fff;
-font-family:Arial;
+color:white;
 text-align:center;
-margin:0;
+font-family:Arial;
 }
 
 canvas{
 width:92vw;
 max-width:360px;
-border:2px solid #fff;
+border:2px solid white;
 margin-top:10px;
-}
-
-button{
-padding:14px;
-margin:10px;
-font-size:16px;
-font-weight:bold;
 }
 </style>
 </head>
 
 <body>
 
-<h3>AI CINEMATIC VIDEO GENERATOR</h3>
+<h3>REAL OBJECT MOTION (NOT CAMERA SHAKE)</h3>
 
 <input type="file" id="upload" accept="image/*"><br>
 <canvas id="c" width="720" height="1280"></canvas><br>
@@ -41,163 +32,144 @@ font-weight:bold;
 
 <script>
 const canvas=document.getElementById("c");
-const ctx=canvas.getContext("2d",{alpha:false});
+const ctx=canvas.getContext("2d");
 
 let img=new Image();
 let ready=false;
 
 upload.onchange=e=>{
- const file=e.target.files[0];
- if(!file) return;
-
- img.src=URL.createObjectURL(file);
-
- img.onload=()=>{
-   ready=true;
-   renderStill();
- };
+img.src=URL.createObjectURL(e.target.files[0]);
+img.onload=()=>{
+ready=true;
+drawBase();
+};
 };
 
-// ================= INITIAL DRAW =================
-function renderStill(){
- ctx.drawImage(img,0,0,canvas.width,canvas.height);
+// ================= BASE IMAGE =================
+function drawBase(){
+ctx.drawImage(img,0,0,canvas.width,canvas.height);
 }
 
-// ================= LIGHT CINEMATIC GRAIN =================
-const grain=document.createElement("canvas");
-const gctx=grain.getContext("2d");
-grain.width=64;
-grain.height=64;
-
-function filmGrain(){
- const id=gctx.createImageData(64,64);
- const d=id.data;
-
- for(let i=0;i<d.length;i+=4){
-   const v=110+Math.random()*30;
-   d[i]=d[i+1]=d[i+2]=v;
-   d[i+3]=16;
- }
-
- gctx.putImageData(id,0,0);
-
- ctx.globalAlpha=0.12;
- ctx.drawImage(grain,0,0,canvas.width,canvas.height);
- ctx.globalAlpha=1;
-}
-
-// ================= REAL OBJECT PHYSICS =================
-let posX=0,posY=0;
+// ================= OBJECT PHYSICS =================
+let objX=0,objY=0;
 let velX=0,velY=0;
 
-function objectPhysics(frame){
+function objectMotion(frame){
 
- // target movement seperti manusia (tidak sinus kaku)
- const targetX=Math.sin(frame*0.045)*18;
- const targetY=Math.cos(frame*0.05)*28;
+// gerakan manusia nyata (bukan goyang)
+const targetX=Math.sin(frame*0.05)*14;
+const targetY=Math.cos(frame*0.04)*24;
 
- // inertia
- velX+=(targetX-posX)*0.06;
- velY+=(targetY-posY)*0.06;
+velX+=(targetX-objX)*0.08;
+velY+=(targetY-objY)*0.08;
 
- // damping fisika nyata
- velX*=0.82;
- velY*=0.82;
+velX*=0.85;
+velY*=0.85;
 
- posX+=velX;
- posY+=velY;
+objX+=velX;
+objY+=velY;
 
- return {x:posX,y:posY};
+return {x:objX,y:objY};
+}
+
+// ================= FILM GRAIN =================
+function grain(){
+ctx.globalAlpha=0.08;
+for(let i=0;i<60;i++){
+ctx.fillStyle=`rgba(255,255,255,${Math.random()*0.03})`;
+ctx.fillRect(
+Math.random()*canvas.width,
+Math.random()*canvas.height,
+1,1
+);
+}
+ctx.globalAlpha=1;
 }
 
 // ================= DRAW FRAME =================
 function drawFrame(frame){
 
- ctx.fillStyle="#000";
- ctx.fillRect(0,0,canvas.width,canvas.height);
+// background DIAM
+ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
- // background tetap
- ctx.drawImage(img,0,0,canvas.width,canvas.height);
+// area objek (tengah)
+const maskW=canvas.width*0.5;
+const maskH=canvas.height*0.55;
+const maskX=canvas.width*0.25;
+const maskY=canvas.height*0.25;
 
- // area objek
- const w=canvas.width*0.52;
- const h=canvas.height*0.52;
- const x=canvas.width*0.24;
- const y=canvas.height*0.27;
+const m=objectMotion(frame);
 
- const motion=objectPhysics(frame);
+ctx.save();
 
- ctx.save();
+ctx.beginPath();
+ctx.rect(maskX,maskY,maskW,maskH);
+ctx.clip();
 
- ctx.beginPath();
- ctx.rect(x,y,w,h);
- ctx.clip();
+// hanya objek bergerak
+ctx.drawImage(
+img,
+m.x,
+m.y,
+canvas.width,
+canvas.height
+);
 
- ctx.drawImage(
-   img,
-   motion.x,
-   motion.y,
-   canvas.width,
-   canvas.height
- );
+ctx.restore();
 
- ctx.restore();
-
- filmGrain();
+grain();
 }
 
-// ================= VIDEO GENERATION =================
-async function generate(){
+// ================= VIDEO EXPORT =================
+function generate(){
 
- if(!ready){
-   alert("Upload gambar dulu");
-   return;
- }
+if(!ready){
+alert("Upload gambar dulu");
+return;
+}
 
- const FPS=60;
- const DURATION=12; // detik FIX
- const TOTAL_FRAMES=FPS*DURATION;
+const FPS=60;
+const duration=12;
+const total=FPS*duration;
 
- const stream=canvas.captureStream(FPS);
+const stream=canvas.captureStream(FPS);
 
- const recorder=new MediaRecorder(stream,{
-   mimeType:"video/webm;codecs=vp9"
- });
+const recorder=new MediaRecorder(stream,{
+mimeType:"video/webm;codecs=vp9"
+});
 
- let chunks=[];
+let chunks=[];
 
- recorder.ondataavailable=e=>{
-   if(e.data.size>0) chunks.push(e.data);
- };
+recorder.ondataavailable=e=>{
+if(e.data.size>0) chunks.push(e.data);
+};
 
- recorder.onstop=()=>{
-   const blob=new Blob(chunks,{type:"video/webm"});
-   const url=URL.createObjectURL(blob);
+recorder.onstop=()=>{
+const blob=new Blob(chunks,{type:"video/webm"});
+const url=URL.createObjectURL(blob);
 
-   const a=document.createElement("a");
-   a.href=url;
-   a.download="cinematic_ai_video.mp4";
-   a.click();
- };
+const a=document.createElement("a");
+a.href=url;
+a.download="real_ai_motion.mp4";
+a.click();
+};
 
- recorder.start();
+recorder.start();
 
- let frame=0;
+let frame=0;
 
- function render(){
+function animate(){
+drawFrame(frame);
+frame++;
 
-   drawFrame(frame);
+if(frame<total){
+requestAnimationFrame(animate);
+}else{
+recorder.stop();
+}
+}
 
-   frame+=1; // NO SLOW MOTION
-
-   if(frame<TOTAL_FRAMES){
-     requestAnimationFrame(render);
-   }else{
-     recorder.stop();
-   }
- }
-
- render();
+animate();
 }
 </script>
 
