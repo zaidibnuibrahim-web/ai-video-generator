@@ -3,234 +3,155 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-
-<title>AI Cinematic Image → Video</title>
+<title>Cinematic AI Video</title>
 
 <style>
 body{
-background:#000;
-color:white;
-font-family:Arial;
-text-align:center;
-margin:0;
+    background:#000;
+    color:white;
+    text-align:center;
+    font-family:Arial;
 }
 
 canvas{
-margin-top:10px;
-border-radius:10px;
-max-width:92%;
-background:black;
+    border:2px solid white;
+    width:90vw;
+    max-width:360px;
 }
-
-input{
-margin-top:20px;
+button{
+    padding:12px;
+    margin:10px;
+    font-size:16px;
 }
 </style>
 </head>
 
 <body>
 
-<h3>🎬 AI Cinematic Generator (Upload → Auto Video)</h3>
+<h3>Cinematic AI Video Generator</h3>
 
-<input type="file" id="imageInput" accept="image/*">
-<br>
-<canvas id="canvas"></canvas>
+<input type="file" id="imgInput" accept="image/*"><br>
+<canvas id="canvas" width="720" height="1280"></canvas><br>
+
+<button onclick="startRender()">Render Video</button>
 
 <script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-// ================= SAFE INIT =================
-const canvas=document.getElementById("canvas");
+let img = new Image();
+let loaded = false;
 
-if(!canvas){
-alert("Canvas tidak ditemukan!");
-}
+// ================= LOAD IMAGE =================
+document.getElementById("imgInput").onchange = e=>{
+    const file = e.target.files[0];
+    if(!file) return;
 
-const ctx=canvas.getContext("2d");
+    img.src = URL.createObjectURL(file);
 
-// ================= PORTRAIT 9:16 =================
-function resizeCanvas(){
-const h=Math.min(window.innerHeight*0.75,960);
-canvas.height=h;
-canvas.width=h*(9/16);
-}
-resizeCanvas();
-window.addEventListener("resize",resizeCanvas);
-
-// ================= IMAGE LOAD =================
-let img=new Image();
-
-document.getElementById("imageInput").onchange=e=>{
-img.src=URL.createObjectURL(e.target.files[0]);
-img.onload=startVideo;
+    img.onload = ()=>{
+        loaded = true;
+        drawFrame(0);
+    };
 };
 
-// ================= COLOR (NETFLIX LOOK) =================
-function netflixColor(frame){
-const exp=1.05+Math.sin(frame*0.05)*0.01;
-ctx.filter=`contrast(1.22) saturate(0.92) brightness(${exp})`;
-}
-function resetColor(){ctx.filter="none";}
+// ================= DRAW FRAME =================
+function drawFrame(t){
 
-// ================= LIGHT FILM GRAIN =================
+    // background hitam (anti putih)
+    ctx.fillStyle="black";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    if(!loaded) return;
+
+    // zoom cinematic pelan
+    const scale = 1 + t*0.0005;
+
+    const w = canvas.width * scale;
+    const h = canvas.height * scale;
+
+    const x = (canvas.width - w)/2;
+    const y = (canvas.height - h)/2;
+
+    ctx.drawImage(img,x,y,w,h);
+
+    filmGrain();
+}
+
+// ================= FILM GRAIN =================
 const grain=document.createElement("canvas");
 const gctx=grain.getContext("2d");
 grain.width=80;
 grain.height=140;
 
 function filmGrain(){
+    const data=gctx.createImageData(grain.width,grain.height);
+    const buf=data.data;
 
-const data=gctx.createImageData(grain.width,grain.height);
-const b=data.data;
+    for(let i=0;i<buf.length;i+=4){
+        const v=Math.random()*255;
+        buf[i]=v;
+        buf[i+1]=v;
+        buf[i+2]=v;
+        buf[i+3]=25;
+    }
 
-for(let i=0;i<b.length;i+=4){
-const v=120+Math.random()*18;
-b[i]=b[i+1]=b[i+2]=v;
-b[i+3]=10;
+    gctx.putImageData(data,0,0);
+
+    ctx.globalAlpha=0.15;
+    ctx.drawImage(grain,0,0,canvas.width,canvas.height);
+    ctx.globalAlpha=1;
 }
 
-gctx.putImageData(data,0,0);
+// ================= VIDEO RENDER =================
+function startRender(){
 
-ctx.globalAlpha=0.08;
-ctx.drawImage(grain,0,0,canvas.width,canvas.height);
-ctx.globalAlpha=1;
+    if(!loaded){
+        alert("Upload gambar dulu");
+        return;
+    }
+
+    const stream = canvas.captureStream(30);
+
+    const recorder = new MediaRecorder(stream,{
+        mimeType:"video/webm"
+    });
+
+    let chunks=[];
+
+    recorder.ondataavailable=e=>{
+        if(e.data.size>0) chunks.push(e.data);
+    };
+
+    recorder.onstop=()=>{
+        const blob=new Blob(chunks,{type:"video/webm"});
+        const url=URL.createObjectURL(blob);
+
+        const a=document.createElement("a");
+        a.href=url;
+        a.download="cinematic_ai_video.webm";
+        a.click();
+    };
+
+    recorder.start();
+
+    let frame=0;
+    let total=180; // 6 detik
+
+    function animate(){
+        drawFrame(frame);
+        frame+=2;
+
+        if(frame<total){
+            requestAnimationFrame(animate);
+        }else{
+            recorder.stop();
+        }
+    }
+
+    animate();
 }
-
-// ================= REAL UFC CAMERA =================
-let camX=0, camY=0;
-let velX=0, velY=0;
-let impact=20;
-
-function camera(frame){
-
-// arah gerak nyata (tracking)
-let targetX=Math.sin(frame*0.06)*120;
-let targetY=Math.cos(frame*0.045)*70;
-
-// fase intens
-if(frame>200){
-targetX=Math.sin(frame*0.12)*160;
-targetY=Math.cos(frame*0.1)*110;
-}
-
-// physics acceleration
-velX+=(targetX-camX)*0.08;
-velY+=(targetY-camY)*0.08;
-
-// damping
-velX*=0.82;
-velY*=0.82;
-
-camX+=velX;
-camY+=velY;
-
-// micro handheld
-const microX=Math.sin(frame*0.5)*1.5;
-const microY=Math.cos(frame*0.45)*1.2;
-
-// impact reaction
-if(frame%60===0) impact=16;
-impact*=0.88;
-
-const hit=Math.sin(frame*0.9)*impact;
-
-// zoom progresif
-let zoom=1.28;
-if(frame>350) zoom=1.34;
-
-return{
-x:camX+microX+hit,
-y:camY+microY+hit*0.5,
-scale:zoom
-};
-}
-
-// ================= DRAW =================
-function drawFrame(frame){
-
-// anti layar putih
-ctx.fillStyle="#000";
-ctx.fillRect(0,0,canvas.width,canvas.height);
-
-netflixColor(frame);
-
-const cam=camera(frame);
-
-const ratio=Math.max(
-canvas.width/img.width,
-canvas.height/img.height
-);
-
-const w=img.width*ratio*cam.scale;
-const h=img.height*ratio*cam.scale;
-
-ctx.drawImage(
-img,
-(canvas.width-w)/2+cam.x,
-(canvas.height-h)/2+cam.y,
-w,h
-);
-
-filmGrain();
-resetColor();
-}
-
-// ================= VIDEO EXPORT =================
-let recorder,chunks=[];
-let frame=0;
-
-// ⭐ 120 FPS FEEL (tetap ringan)
-const FPS=60;
-const DURATION=12;
-const TOTAL_FRAMES=FPS*DURATION;
-
-function startVideo(){
-
-const stream=canvas.captureStream(FPS);
-
-let options={mimeType:'video/mp4;codecs=h264'};
-if(!MediaRecorder.isTypeSupported(options.mimeType)){
-options={mimeType:'video/webm'};
-}
-
-recorder=new MediaRecorder(stream,options);
-
-chunks=[];
-
-recorder.ondataavailable=e=>{
-if(e.data.size>0)chunks.push(e.data);
-};
-
-recorder.onstop=()=>{
-const blob=new Blob(chunks,{type:options.mimeType});
-const url=URL.createObjectURL(blob);
-
-const a=document.createElement("a");
-a.href=url;
-a.download="ai_cinematic_video.mp4";
-a.click();
-};
-
-recorder.start();
-
-frame=0;
-
-function animate(){
-
-drawFrame(frame);
-
-// cepat tapi tetap fisika nyata
-frame+=2.4;
-
-if(frame<TOTAL_FRAMES){
-requestAnimationFrame(animate);
-}else{
-recorder.stop();
-}
-}
-
-animate();
-}
-
 </script>
+
 </body>
 </html>
